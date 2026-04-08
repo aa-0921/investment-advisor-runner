@@ -1,0 +1,44 @@
+name: Signal Notification Check
+
+on:
+  schedule:
+    # 30分間隔（UTC）。市場時間帯に合わせて調整可能
+    - cron: '3,33 * * * *'
+  workflow_dispatch: # 手動実行用
+
+jobs:
+  check-signals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Clone private repo
+        env:
+          PAT_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          git clone "https://x-access-token:${PAT_TOKEN}@github.com/aa-0921/investment-advisor.git"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        working-directory: investment-advisor
+        run: uv sync --no-dev
+
+      - name: Restore cooldown cache
+        uses: actions/cache@v4
+        with:
+          path: investment-advisor/data/.last_notified
+          key: notify-cooldown-${{ github.run_id }}
+          restore-keys: notify-cooldown-
+
+      - name: Run notification check
+        working-directory: investment-advisor
+        env:
+          NOTIFY_EMAIL_PASSWORD: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
+          NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
+        run: uv run python scripts/notify_check.py
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf investment-advisor
