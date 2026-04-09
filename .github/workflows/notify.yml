@@ -28,9 +28,14 @@ jobs:
       - name: Restore cooldown cache
         uses: actions/cache@v4
         with:
-          path: investment-advisor/data/.last_notified
+          path: cooldown-data/.last_notified
           key: notify-cooldown-${{ github.run_id }}
           restore-keys: notify-cooldown-
+
+      - name: Copy cooldown file into repo
+        run: |
+          mkdir -p investment-advisor/data
+          cp cooldown-data/.last_notified investment-advisor/data/.last_notified 2>/dev/null || true
 
       - name: Run notification check
         working-directory: investment-advisor
@@ -38,6 +43,12 @@ jobs:
           NOTIFY_EMAIL_PASSWORD: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
           NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
         run: uv run python scripts/notify_check.py
+
+      - name: Save cooldown file for cache
+        if: always()
+        run: |
+          mkdir -p cooldown-data
+          cp investment-advisor/data/.last_notified cooldown-data/.last_notified 2>/dev/null || true
 
       - name: Cleanup
         if: always()
