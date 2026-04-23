@@ -1,0 +1,39 @@
+name: Alpha Pipeline
+
+on:
+  schedule:
+    # 6時間毎 :30（UTC） → JST: 9:30, 15:30, 21:30, 3:30
+    - cron: '30 0,6,12,18 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-alpha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Clone private repo
+        env:
+          PAT_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          git clone --depth 1 \
+            "https://x-access-token:${PAT_TOKEN}@github.com/aa-0921/investment-advisor.git" \
+            repo
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        working-directory: repo
+        run: uv sync --no-dev
+
+      - name: Run Alpha Pipeline
+        working-directory: repo
+        env:
+          NOTIFY_EMAIL_PASSWORD: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
+          NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
+        run: uv run python scripts/run_alpha_pipeline.py
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf repo
