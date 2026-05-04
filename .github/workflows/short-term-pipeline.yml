@@ -1,0 +1,60 @@
+name: Short-Term Pipeline
+
+on:
+  schedule:
+    # 2 時間ごと :17（UTC, off-minute で round-number 集中 drop を回避）
+    # UTC 0:17, 2:17, 4:17, 6:17, 8:17, 10:17, 12:17, 14:17, 16:17, 18:17, 20:17, 22:17
+    # 米国市場時間 (UTC 14:30-21:00) 中: 14:17, 16:17, 18:17, 20:17 + 終値直後 22:17
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-short-term:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Clone private repo
+        env:
+          PAT_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          git clone --depth 1 \
+            "https://x-access-token:${PAT_TOKEN}@github.com/aa-0921/investment-advisor.git" \
+            repo
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        working-directory: repo
+        run: uv sync --no-dev
+
+      # 通知履歴 (cooldown 24h + 過去シグナル比較) をキャッシュで持ち回り
+      - name: Restore short-term history cache
+        uses: actions/cache@v4
+        with:
+          path: short-term-cache/short_term_signal_history.json
+          key: short-term-history-${{ github.run_id }}
+          restore-keys: short-term-history-
+
+      - name: Copy history file into repo
+        run: |
+          mkdir -p repo/data
+          cp short-term-cache/short_term_signal_history.json repo/data/short_term_signal_history.json 2>/dev/null || true
+
+      - name: Run Short-Term Pipeline
+        working-directory: repo
+        env:
+          NOTIFY_EMAIL_PASSWORD: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
+          NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
+        run: uv run python scripts/run_short_term_pipeline.py
+
+      - name: Save history file for cache
+        if: always()
+        run: |
+          mkdir -p short-term-cache
+          cp repo/data/short_term_signal_history.json short-term-cache/short_term_signal_history.json 2>/dev/null || true
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf repo
