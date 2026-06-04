@@ -1,0 +1,49 @@
+name: External Signals Pipeline
+
+on:
+  schedule:
+    # 6時間毎 :47（UTC） → JST: 10:47, 16:47, 22:47, 4:47
+    - cron: '47 1,7,13,19 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-external-signals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Clone private repo
+        env:
+          PAT_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
+        run: |
+          git clone \
+            "https://x-access-token:${PAT_TOKEN}@github.com/aa-0921/investment-advisor.git" \
+            repo
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        working-directory: repo
+        run: uv sync --no-dev
+
+      - name: Run External Signals Pipeline
+        working-directory: repo
+        env:
+          NOTIFY_EMAIL_PASSWORD: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
+          NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
+        run: uv run python scripts/run_external_signals.py
+
+      - name: Persist external signal history
+        working-directory: repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f data/external_signal_history.json
+          git diff --cached --quiet || git commit -m "chore: update external signal history [skip ci]"
+          git pull --rebase --autostash || true
+          git push
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf repo
