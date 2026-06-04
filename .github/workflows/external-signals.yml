@@ -32,6 +32,7 @@ jobs:
         env:
           NOTIFY_EMAIL_PASSWORD: ${{ secrets.NOTIFY_EMAIL_PASSWORD }}
           NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: uv run python scripts/run_external_signals.py
 
       - name: Persist external signal history
