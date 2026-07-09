@@ -18,7 +18,7 @@ jobs:
         env:
           PAT_TOKEN: ${{ secrets.PRIVATE_REPO_PAT }}
         run: |
-          git clone --depth 1 \
+          git clone \
             "https://x-access-token:${PAT_TOKEN}@github.com/aa-0921/investment-advisor.git" \
             repo
 
@@ -29,19 +29,6 @@ jobs:
         working-directory: repo
         run: uv sync --no-dev
 
-      # 通知履歴 (cooldown 24h + 過去シグナル比較) をキャッシュで持ち回り
-      - name: Restore short-term history cache
-        uses: actions/cache@v4
-        with:
-          path: short-term-cache/short_term_signal_history.json
-          key: short-term-history-${{ github.run_id }}
-          restore-keys: short-term-history-
-
-      - name: Copy history file into repo
-        run: |
-          mkdir -p repo/data
-          cp short-term-cache/short_term_signal_history.json repo/data/short_term_signal_history.json 2>/dev/null || true
-
       - name: Run Short-Term Pipeline
         working-directory: repo
         env:
@@ -49,19 +36,13 @@ jobs:
           NOTIFY_EMAIL_ADDRESS: ${{ secrets.NOTIFY_EMAIL_ADDRESS }}
         run: uv run python scripts/run_short_term_pipeline.py
 
-      - name: Save history file for cache
-        if: always()
-        run: |
-          mkdir -p short-term-cache
-          cp repo/data/short_term_signal_history.json short-term-cache/short_term_signal_history.json 2>/dev/null || true
-
-      - name: Persist pending notifications
+      - name: Persist short-term signal history and pending notifications
         working-directory: repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f data/pending_notifications.json
-          git diff --cached --quiet || git commit -m "chore: update pending notifications [skip ci]"
+          git add -f data/short_term_signal_history.json data/pending_notifications.json
+          git diff --cached --quiet || git commit -m "chore: update short-term signal history [skip ci]"
           git pull --rebase --autostash || true
           git push
 
